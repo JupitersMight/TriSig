@@ -2,304 +2,317 @@ import pandas as pd
 import numpy as np
 import math
 from collections import Counter
-from scipy.special import betainc
-from scipy.stats import binom
+from scipy.special import betainc, betaincinv
 from math import comb
 from decimal import *
+import sys
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-def y_ind_z_ind(dataframes, tricluster):
-    Z = len(dataframes)
-    Y = len(dataframes[0].columns)
-    cols = dataframes[0].columns
+class TriSig:
 
-    filtered_dataframes = [dataframes[i] for i in tricluster["times"]]
-    p = Decimal(1.0)
-    # Para constantes
-    for z in range(len(filtered_dataframes)):
+    transitions = {}
+    p_pre_computed = {}
+    ind_transitions = {}
+    combined_data = None
+    data = None
+
+    def __init__(self, data):
+        nr_transitions = len(data[0][data[0].columns[0]])*(len(data)-1)
+        self.data = data
+        self.combined_data = pd.concat(data).reset_index(drop=True)
+        for y_i in self.combined_data.columns:
+            self.transitions[y_i] = {}
+            vals = self.combined_data[y_i].value_counts().to_dict()
+            for key in vals.keys():
+                vals[key] = vals[key] / len(self.combined_data[y_i])
+            self.p_pre_computed[y_i] = vals
+
+        z = 0
+        while z < (len(self.data) - 1):
+            z_0 = self.data[z]
+            z+=1
+            z_1 = self.data[z]
+            for y_i in z_0.columns:
+                temp_data = pd.concat([z_0[y_i], z_1[y_i]], axis=1)
+                temp_data.columns = ["A", "B"]
+                temp_data = temp_data.groupby(['A','B']).size().reset_index().rename(columns={0:'count'})
+                temp_data = pd.concat([temp_data["A"].astype(str) + temp_data["B"].astype(str), temp_data["count"]], axis=1)
+
+                for val in temp_data[0]:
+                    if val not in self.transitions[y_i].keys():
+                        self.transitions[y_i][val] = 0
+                temp_data.columns = ["keys", "count"]
+                vals = pd.Series(temp_data["count"].values,index=temp_data["keys"]).to_dict()
+                for key in vals.keys():
+                    self.transitions[y_i][key] += vals[key]/nr_transitions
+
+    @staticmethod
+    def bin_prob(n, p, k):
+        if p == 1 and n == k:
+            return 1
+        ctx = Context()
+        arr = math.factorial(n) // math.factorial(k) // math.factorial(n - k)
+        bp = (Decimal(arr) * ctx.power(Decimal(p), Decimal(k)) * ctx.power(Decimal(1 - p), Decimal(n - k)))
+        return float(bp) if sys.float_info.min < bp else sys.float_info.min
+
+    @staticmethod
+    def binom(n, p, k):
+        soma = 0
+        for i in range(k, n+1):
+            soma += TriSig.bin_prob(n, p, i)
+        return soma
+
+    @staticmethod
+    def hochberg_critical_value(p_values, false_discovery_rate=0.05):
+        ordered_pvalue = sorted(p_values)
+        print(ordered_pvalue)
+
+        critical_values = []
+        for i in range(1,len(ordered_pvalue)+1):
+            critical_values.append((i/len(ordered_pvalue)) * false_discovery_rate)
+
+        critical_val = ordered_pvalue[len(ordered_pvalue)-1]
+        for i in reversed(range(len(ordered_pvalue))):
+            if ordered_pvalue[i] < critical_values[i]:
+                critical_val = ordered_pvalue[i]
+                break
+        if critical_val > 0.05:
+            critical_val = 0.05
+        return critical_val
+
+    @staticmethod
+    def bonferroni_correction(alpha, m):
+        return alpha / m
+
+    def y_ind_z_dep(self, tricluster, i_d_d_vars=False, print_statistics=False):
+        if print_statistics:
+            print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
+
+        p = Decimal(1.0)
+        for z_i in tricluster["times"]:
+            if print_statistics:
+                print("P("+str(z_i)+")")
+            for col in tricluster["columns"]:
+                y_i = self.data[z_i].columns[col]
+                val_yi = self.data[z_i][y_i][tricluster["rows"][0]]
+                p = p * Decimal(self.p_pre_computed[y_i][val_yi])
+                if print_statistics:
+                    print("P(Y) = "+str(self.p_pre_computed[y_i][val_yi]))
+
+        # Adjust p based on number of existing contexts
+        p = p * Decimal(comb(len(self.data), len(tricluster["times"])))
+        if p > 1:
+            p = Decimal(1.0)
+
+        pvalue = Decimal(TriSig.binom(len(self.data[0][self.data[0].columns[0]]), p, len(tricluster["rows"])))
+        if i_d_d_vars:
+            pvalue = float(pvalue * Decimal(comb(len(self.data[0].columns), len(tricluster["columns"]))))
+        if pvalue > 1:
+            pvalue = 1
+
+        if print_statistics:
+            print("pvalue = "+str(pvalue))
+
+        return float(pvalue)
+
+    def y_dep_z_dep(self, tricluster, i_d_d_vars=False, print_statistics=False):
+        #############
+        if print_statistics:
+            print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
+        #############
+        filtered_cols_data = self.combined_data[[col for col in self.combined_data.columns[tricluster["columns"]]]]
+        combined_data_concatenated = filtered_cols_data[filtered_cols_data.columns[0]].astype(str) + filtered_cols_data[filtered_cols_data.columns[1]].astype(str)
+        for i in range(2, len(filtered_cols_data.columns)):
+            combined_data_concatenated += filtered_cols_data[filtered_cols_data.columns[i]].astype(str)
+        combined_data_concatenated_dict = combined_data_concatenated.value_counts().to_dict()
+
+        p = Decimal(1.0)
+        for z_i in tricluster["times"]:
+            if print_statistics:
+                print("P("+str(z_i)+")")
+            y_i = self.data[z_i].columns[tricluster["columns"]]
+            val_yi = self.data[z_i][y_i]
+            pattern_z = val_yi[val_yi.columns[0]].astype(str) + val_yi[val_yi.columns[1]].astype(str)
+            for i in range(2, len(val_yi.columns)):
+                pattern_z += val_yi[val_yi.columns[i]].astype(str)
+            pattern_z = pattern_z[tricluster["rows"][0]]
+            temp_p = combined_data_concatenated_dict[pattern_z] / len(combined_data_concatenated)
+            p = p * Decimal(temp_p)
+            if print_statistics:
+                print("P(Y) = "+str(temp_p))
+
+        # Adjust p based on number of existing contexts
+        p = p * Decimal(comb(len(self.data), len(tricluster["times"])))
+        if p > 1:
+            p = Decimal(1.0)
+
+        pvalue = Decimal(TriSig.binom(len(self.data[0][self.data[0].columns[0]]), p, len(tricluster["rows"])))
+        if i_d_d_vars:
+            pvalue = float(pvalue * Decimal(comb(len(self.data[0].columns), len(tricluster["columns"]))))
+        if pvalue > 1:
+            pvalue = 1
+        if print_statistics:
+            print("pvalue = "+str(pvalue))
+
+        return float(pvalue)
+
+    def y_ind_z_ind(self, tricluster, i_d_d_vars=False, print_statistics=False):
+        Z = len(self.data)
+        Y = len(self.data[0].columns)
+        cols = self.data[0].columns
+        if print_statistics:
+            print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
+
+        filtered_dataframes = [self.data[i] for i in tricluster["times"]]
+
+        p = Decimal(1.0)
+        # Para constantes
+        for z in range(len(filtered_dataframes)):
+            if print_statistics:
+                print("Z = "+ str(z))
+            p_z = 1
+            for col in tricluster["columns"]:
+                total_observed_samples = list(filtered_dataframes[z][cols[col]])
+                pattern_observed_samples = list(filtered_dataframes[z][cols[col]].iloc[tricluster["rows"]])
+                pattern_val = Counter(pattern_observed_samples).most_common(1)[0][0]
+                filtered_samples = list(filter(lambda val: val == pattern_val, total_observed_samples))
+                # New just for print
+                p_y = Decimal((len(filtered_samples)/len(total_observed_samples)))
+                if print_statistics:
+                    print("P(Y) = "+str(p_y))
+                p_z = p_z * p_y
+                # Original p = p * Decimal((len(filtered_samples)/len(total_observed_samples)))
+                p = p * p_y
+            if print_statistics:
+                print("P(Z = "+str(z)+")"+str(p_z))
+
+        pvalue = Decimal(TriSig.binom(len(filtered_dataframes[0][filtered_dataframes[0].columns[0]]), p, len(tricluster["rows"])))
+
+        # Adjust p
+        if i_d_d_vars:
+            pvalue = pvalue * Decimal(comb(Z, len(filtered_dataframes)))
+            pvalue = pvalue * Decimal(comb(Y, len(tricluster["columns"])))
+        if pvalue > 1:
+            pvalue = 1.0
+        if print_statistics:
+            print("pvalue = "+str(pvalue))
+
+        return float(pvalue)
+
+    def y_ind_z_markov(self, tricluster, i_d_d_vars=False, print_statistics=False):
+
+        if print_statistics:
+            print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
+        Y = len(self.data[0].columns)
+
+        p = Decimal(1.0)
         for col in tricluster["columns"]:
+            y_i = self.data[0].columns[col]
+            val = self.data[tricluster["times"][0]][y_i][tricluster["rows"][0]]
+            p = p * Decimal(self.p_pre_computed[self.data[0].columns[col]][val])
+            print("P(k1)="+str(self.p_pre_computed[self.data[0].columns[col]][val]))
 
-            total_observed_samples = list(filtered_dataframes[z][cols[col]])
-            pattern_observed_samples = list(filtered_dataframes[z][cols[col]].iloc[tricluster["rows"]])
-            pattern_val = Counter(pattern_observed_samples).most_common(1)[0][0]
-            filtered_samples = list(filter(lambda val: val == pattern_val, total_observed_samples))
-            p = p * Decimal((len(filtered_samples)/len(total_observed_samples)))
+            z = 0
+            while z < (len(tricluster["times"]) - 1):
+                z_0 = self.data[tricluster["times"][z]]
+                z+=1
+                z_1 = self.data[tricluster["times"][z]]
 
-    # Adjust p
-    p = p * Decimal(comb(Z, len(filtered_dataframes)))
-    p = float(p * Decimal(comb(Y, len(tricluster["columns"]))))
-    if p > 1:
-        p = 1
+                temp_data = z_0[y_i].astype(str) + z_1[y_i].astype(str)
+                prob_antecedent = self.p_pre_computed[y_i][z_0[y_i][tricluster["rows"][0]]]
+                t = self.transitions[y_i][temp_data[tricluster["rows"][0]]]
+                print("P(transition-"+str(z)+")="+str(float((Decimal(t)/Decimal(prob_antecedent)))))
+                p = p * (Decimal(t)/Decimal(prob_antecedent))
 
-    return betainc(
-        len(tricluster["rows"]),
-        len(dataframes[0][dataframes[0].columns[0]]),
-        p
-    )
+        # Adjust p for misalignments
+        p = p * Decimal((len(self.data)-len(tricluster["times"])+1))
+        if p > 1.0:
+            p = 1
+        pvalue = Decimal(TriSig.binom(len(self.data[0][self.data[0].columns[0]]), p, len(tricluster["rows"])))
 
+        # Adjust p-value if variables idd
+        if i_d_d_vars:
+            pvalue = pvalue * Decimal(comb(Y, len(tricluster["columns"])))
+        if pvalue > 1:
+            pvalue = 1
 
-def y_ind_z_dep(dataframes, tricluster):
-    Z = len(dataframes)
-    Y = len(dataframes[0].columns)
+        if print_statistics:
+            print("pvalue = "+str(pvalue))
 
-    filtered_dataframes = [dataframes[i] for i in tricluster["times"]]
-    p = Decimal(1.0)
-    # Para constantes
-    for col in tricluster["columns"]:
-        total_observed_samples = []
-        pattern_observed_samples = []
-        for x in range(len(filtered_dataframes[filtered_dataframes[0].columns[0]])):
-            val = ""
-            for z in range(len(filtered_dataframes)):
-                df = filtered_dataframes[z]
-                val += str(df.loc[x, list(df.columns)[col]])
-            if x in tricluster["rows"]:
-                pattern_observed_samples.append(val)
-            total_observed_samples.append(val)
-        pattern_val = Counter(pattern_observed_samples).most_common(1)[0][0]
-        filtered_samples = list(filter(lambda val: val == pattern_val, total_observed_samples))
-        p = p * Decimal((len(filtered_samples)/len(total_observed_samples)))
+        return float(pvalue)
 
-    # Adjust p
-    p = p * Decimal(comb(Z, len(filtered_dataframes)))
-    p = float(p * Decimal(comb(Y, len(tricluster["columns"]))))
-    if p > 1:
-        p = 1
+    def y_dep_z_markov(self, tricluster, i_d_d_vars=False, print_statistics=False):
+        if print_statistics:
+            print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
 
-    return betainc(
-        len(tricluster["rows"]),
-        len(dataframes[0][dataframes[0].columns[0]]),
-        p
-    )
+        Y = len(self.data[0].columns)
 
+        # P de antecedente
+        filtered_cols_data = self.combined_data[[col for col in self.combined_data.columns[tricluster["columns"]]]]
+        combined_data_concatenated = filtered_cols_data[filtered_cols_data.columns[0]].astype(str) + filtered_cols_data[filtered_cols_data.columns[1]].astype(str)
+        for i in range(2, len(filtered_cols_data.columns)):
+            combined_data_concatenated += filtered_cols_data[filtered_cols_data.columns[i]].astype(str)
+        combined_data_concatenated_dict = combined_data_concatenated.value_counts().to_dict()
 
-def y_dep_z_ind(dataframes, tricluster):
-    Z = len(dataframes)
-    Y = len(dataframes[0].columns)
-    cols = dataframes[0].columns
+        p = Decimal(combined_data_concatenated_dict[combined_data_concatenated[tricluster["rows"][0]]]/len(combined_data_concatenated))
+        if print_statistics:
+            print("P(k1)="+str(p))
+        # Create Transitions dictionary
+        transitions_combined = pd.Series()
+        z = 0
+        while z < (len(self.data) - 1):
+            z_0 = self.data[z][self.data[0].columns[tricluster["columns"]]]
+            z+=1
+            z_1 = self.data[z][self.data[0].columns[tricluster["columns"]]]
 
-    filtered_dataframes = [dataframes[int(i)] for i in tricluster["times"]]
-    p = Decimal(1.0)
-    # Para constantes
-    for df in filtered_dataframes:
-        pattern_val = ""
-        for i_col in range(0, len(tricluster["columns"])):
-            pattern_val += str(df.iloc[int(tricluster["rows"][0]), int(tricluster["columns"][i_col])])
-        new_vals = []
+            z_0_concatenated = z_0[z_0.columns[0]].astype(str) + z_0[z_0.columns[1]].astype(str)
+            z_1_concatenated = z_1[z_1.columns[0]].astype(str) + z_1[z_1.columns[1]].astype(str)
 
-        for x_val in range(0, len(df[cols[int(tricluster["columns"][0])]])):
-            aux_val = ""
-            for i_col in range(0, len(tricluster["columns"])):
-                aux_val += str(df.iloc[x_val][int(tricluster["columns"][i_col])])
-            new_vals.append(aux_val)
+            for i in range(2, len(filtered_cols_data.columns)):
+                z_0_concatenated += z_0[z_0.columns[i]].astype(str)
+                z_1_concatenated += z_1[z_1.columns[i]].astype(str)
 
-        counter = 0
-        for val in new_vals:
-            if val == pattern_val:
-                counter+=1
+            transitions_combined = transitions_combined.append(z_0_concatenated + z_1_concatenated)
 
-        p *= Decimal((counter/len(new_vals)))
+        transition_dict = transitions_combined.value_counts().to_dict()
 
-    # Adjust p
-    p = p * Decimal(comb(Z, len(filtered_dataframes)))
-    p = float(p * Decimal(comb(Y, len(tricluster["columns"]))))
-    if p > 1:
-        p = 1
+        z = 0
+        while z < (len(tricluster["times"]) - 1):
+            z_0 = self.data[tricluster["times"][z]][self.data[0].columns[tricluster["columns"]]]
+            z+=1
+            z_1 = self.data[tricluster["times"][z]][self.data[0].columns[tricluster["columns"]]]
 
-    return betainc(
-        len(tricluster["rows"]),
-        len(dataframes[0][dataframes[0].columns[0]]),
-        p
-    )
+            z_0_concatenated = z_0[z_0.columns[0]].astype(str) + z_0[z_0.columns[1]].astype(str)
+            z_1_concatenated = z_1[z_1.columns[0]].astype(str) + z_1[z_1.columns[1]].astype(str)
 
+            for i in range(2, len(filtered_cols_data.columns)):
+                z_0_concatenated += z_0[z_0.columns[i]].astype(str)
+                z_1_concatenated += z_1[z_1.columns[i]].astype(str)
 
-def y_ind_z_markov(dataframes, tricluster, real_dataset=False):
-    Z = len(dataframes)
-    Y = len(dataframes[0].columns)
-    cols = dataframes[0].columns
+            p_transition = Decimal(transition_dict[(z_0_concatenated+z_1_concatenated)[tricluster["rows"][0]]])/Decimal(len(transitions_combined))
+            p_ante = Decimal(combined_data_concatenated_dict[z_0_concatenated[tricluster["rows"][0]]])/Decimal(len(combined_data_concatenated))
+            if print_statistics:
+                print("P(transition-"+str(z)+")="+str(float(p_transition/p_ante)))
+            p = p * p_transition/p_ante
 
-    filtered_dataframes = [dataframes[i] for i in tricluster["times"]]
+        # Adjust p for misalignments
+        p = p * Decimal((len(self.data)-len(tricluster["times"])+1))
+        if p > 1.0:
+            p = 1
+        pvalue = Decimal(TriSig.binom(len(self.data[0][self.data[0].columns[0]]), p, len(tricluster["rows"])))
 
-    if real_dataset:
-        for z_i in range(len(filtered_dataframes)):
-            df = filtered_dataframes[z_i]
-            for y_i in range(len(tricluster["columns"])):
-                minimum_tri = df.iloc[tricluster["rows"], tricluster["columns"][y_i]].min()
-                maximum_tri = df.iloc[tricluster["rows"], tricluster["columns"][y_i]].max()
-                filtered_dataframes[z_i].iloc[:,tricluster["columns"][y_i]] = filtered_dataframes[z_i].iloc[:,tricluster["columns"][y_i]].apply(lambda x: 1 if minimum_tri<x<maximum_tri else 0)
+        # Adjust p-value if variables idd
+        if i_d_d_vars:
+            pvalue = pvalue * Decimal(comb(Y, len(tricluster["columns"])))
+        if pvalue > 1:
+            pvalue = 1
 
-    # Initialize probability of each bicluster
-    p_for_each_dimension = [Decimal(1.0) for i in tricluster["times"]]
-    p_for_each_transition = [Decimal(1.0) for i in range(len(tricluster["times"])-1)]
+        if print_statistics:
+            print("pvalue = "+str(pvalue))
+        return float(pvalue)
 
-    total_samples = len(filtered_dataframes[0][filtered_dataframes[0].columns[0]])
-
-    # Calculate the probability in each Z of pattern
-    for z in range(len(filtered_dataframes)):
-        # get pattern value for each column
-        pattern_df = filtered_dataframes[z]
-        pattern_df = pattern_df.filter([filtered_dataframes[z].columns[i] for i in tricluster["columns"]], axis=1)
-        pattern_df = pattern_df.iloc[tricluster["rows"]]
-
-        col_val = {}
-        for col in pattern_df.columns:
-            col_val[col] = Counter(list(pattern_df[col])).most_common(1)[0][0]
-
-        for col in tricluster["columns"]:
-            p_x = len(list(filter(lambda val: val == col_val[cols[col]], list(filtered_dataframes[z].iloc[:,col]))))
-
-            p_for_each_dimension[z] *= Decimal((p_x / total_samples))
-
-    # Calculate the probability in each transition in Z
-    z = 0
-    while z < (len(filtered_dataframes) - 1):
-        z_0 = dataframes[z]
-        z+=1
-        z_1 = dataframes[z]
-
-        for col in tricluster["columns"]:
-            total_observed_samples = []
-            pattern_observed_samples = []
-            for x in range(len(filtered_dataframes[0][filtered_dataframes[0].columns[0]])):
-                val = str(z_0.iloc[x, col]) + str(z_1.iloc[x, col])
-                total_observed_samples.append(val)
-                if x in tricluster["rows"]:
-                    pattern_observed_samples.append(val)
-
-            pattern_val = Counter(pattern_observed_samples).most_common(1)[0][0]
-            filtered_samples = list(filter(lambda val: val == pattern_val, total_observed_samples))
-            p_for_each_transition[z-1] = p_for_each_transition[z-1] * Decimal((len(filtered_samples)/len(total_observed_samples)))
-
-    #Pattern probability
-    p = p_for_each_dimension[0]
-    for z in range(len(filtered_dataframes)-1):
-        p *= (p_for_each_transition[z]/p_for_each_dimension[z])
-
-    # Adjusted pattern probability
-    # Y
-    p = p * Decimal(comb(Y, len(tricluster["columns"])))
-    # Z
-    p = float(p * Decimal((Z-len(tricluster["times"])+1)))
-    if p > 1:
-        p = 1
-
-    return betainc(
-        len(tricluster["rows"]),
-        len(dataframes[0][dataframes[0].columns[0]]),
-        p
-    )
-
-
-def y_dep_z_markov(dataframes, tricluster):
-    Z = len(dataframes)
-    Y = len(dataframes[0].columns)
-    cols = dataframes[0].columns
-
-    filtered_dataframes = [dataframes[i] for i in tricluster["times"]]
-    # Initialize probability of each bicluster
-    p_for_each_dimension = [Decimal(1.0) for i in tricluster["times"]]
-    p_for_each_transition = [Decimal(1.0) for i in range(len(tricluster["times"])-1)]
-
-    # get pattern value for each column
-    pattern_df = filtered_dataframes[0].\
-        filter([filtered_dataframes[0].columns[i] for i in tricluster["columns"]], axis=1)
-    pattern_df = pattern_df.iloc[tricluster["rows"]]
-
-    col_val = {}
-    for col in pattern_df.columns:
-        col_val[col] = Counter(list(pattern_df[col])).most_common(1)[0][0]
-
-    # Calculate the probability in each Z of pattern
-    for z in range(len(filtered_dataframes)):
-        df = dataframes[z]
-        pattern_val = ""
-        for i_col in range(0, len(tricluster["columns"])):
-            pattern_val += str(df[cols[tricluster["columns"][i_col]]].iloc[tricluster["rows"][0]])
-        new_vals = []
-
-        for x_val in range(0, len(df[cols[tricluster["columns"][0]]])):
-            aux_val = ""
-            for i_col in range(0, len(tricluster["columns"])):
-                aux_val += str(df.iloc[x_val][cols[tricluster["columns"][i_col]]])
-            new_vals.append(aux_val)
-
-        counter = 0
-        for val in new_vals:
-            if val == pattern_val:
-                counter+=1
-
-        p_for_each_dimension[z] *= Decimal((counter/len(new_vals)))
-
-
-    # Calculate the probability in each transition in Z
-    z = 0
-    while z < (len(filtered_dataframes) - 1):
-        z_0 = dataframes[z]
-        z+=1
-        z_1 = dataframes[z]
-
-        pattern_val_0 = ""
-        pattern_val_1 = ""
-        for i_col in range(0, len(tricluster["columns"])):
-            pattern_val_0 += str(z_0[cols[tricluster["columns"][i_col]]].iloc[tricluster["rows"][0]])
-            pattern_val_1 += str(z_1[cols[tricluster["columns"][i_col]]].iloc[tricluster["rows"][0]])
-        new_vals_zo = []
-        new_vals_z1 = []
-        for x_val in range(0, len(z_0[cols[tricluster["columns"][0]]])):
-            aux_val_0 = ""
-            aux_val_1 = ""
-            for i_col in range(0, len(tricluster["columns"])):
-                aux_val_0 += str(z_0[cols[tricluster["columns"][i_col]]].iloc[x_val])
-                aux_val_1 += str(z_1[cols[tricluster["columns"][i_col]]].iloc[x_val])
-            new_vals_zo.append(aux_val_0)
-            new_vals_z1.append(aux_val_1)
-
-        counter = 0
-        for i in range(0, len(new_vals_zo)):
-            if new_vals_zo[i] == pattern_val_0 and new_vals_z1[i] == pattern_val_1:
-                counter+=1
-
-        p_for_each_transition[z-1] = p_for_each_transition[z-1] * Decimal((counter/len(new_vals_zo)))
-
-    #Pattern probability
-    p = p_for_each_dimension[0]
-    for z in range(len(filtered_dataframes)-1):
-        if p_for_each_dimension[z] == Decimal(0.0):
-            p = Decimal(math.inf)
-            break
-        p*= (p_for_each_transition[z]/p_for_each_dimension[z])
-
-    # Y
-    p = p * Decimal(comb(Y, len(tricluster["columns"])))
-    # Z
-    p = float(p * Decimal((Z-len(tricluster["times"])+1)))
-    if p > 1:
-        p = 1
-
-    return betainc(
-        len(tricluster["rows"]),
-        len(dataframes[0][dataframes[0].columns[0]]),
-        p
-    )
-
-
-def hochberg_critical_value(p_values, false_discovery_rate=0.05):
-    ordered_pvalue = sorted(p_values)
-
-    critical_values = []
-    for i in range(1,len(ordered_pvalue)+1):
-        critical_values.append((i/len(ordered_pvalue)) * false_discovery_rate)
-
-    critical_val = critical_values[0]
-    for i in reversed(range(len(ordered_pvalue))):
-        if ordered_pvalue[i] < critical_values[i]:
-            critical_val = critical_values[i]
-            break
-
-    return critical_val
-
-
-def bonferroni_correction(alpha, m):
-    return alpha / m
 
 

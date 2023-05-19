@@ -17,6 +17,14 @@ data_folder = path.abspath(path.join(__file__, "../../.."))+"\\data\\glycine\\"
 glycine_file = data_folder+"data.csv"
 
 
+def read_glycine(files, transpose=True):
+    dataframes = []
+    for file_i in range(len(files)):
+        df = pd.read_csv(files[file_i])
+        dataframes.append(df.drop(columns=[df.columns[0], df.columns[-1]]).T if transpose else df.drop(columns=[df.columns[0], df.columns[-1]]))
+    return dataframes
+
+
 def process_glycine(file):
     df = pd.read_csv(file)
 
@@ -83,17 +91,17 @@ def transform_glycine_diogo(files):
 
     output.close()
 
-
-process_glycine(glycine_file)
-
 glycine_discretized_files = [
-    curr_dir+"\\glycine_output\\discretized_0.csv",
-    curr_dir+"\\glycine_output\\discretized_1.csv",
-    curr_dir+"\\glycine_output\\discretized_2.csv",
-    curr_dir+"\\glycine_output\\discretized_3.csv",
-    curr_dir+"\\glycine_output\\discretized_4.csv",
-    curr_dir+"\\glycine_output\\discretized_5.csv"
-]
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_0.csv",
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_1.csv",
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_2.csv",
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_3.csv",
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_4.csv",
+        curr_dir+"\\process_datasets\\glycine_output\\discretized_5.csv"
+    ]
 
-transform_glycine_diogo(glycine_discretized_files)
+if __name__ == "__main__":
+    process_glycine(glycine_file)
+
+    transform_glycine_diogo(glycine_discretized_files)
 

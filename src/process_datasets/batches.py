@@ -26,6 +26,28 @@ def is_number(n):
     except ValueError:
         is_number = False
     return is_number
+    
+
+def read_batchs(files, transpose=True):
+    dataframes = []
+    for file_i in range(len(files)):
+        df = pd.read_csv(files[file_i]).reset_index(drop=True) #
+        df = df.drop(columns=[df.columns[0]]) #.to_numpy()
+        df.columns = list(range(0,len(df.columns)))
+        dataframes.append(df.T)
+
+    final_dataframe = [[[0 for z in range(len(dataframes))] for j in range(len(dataframes[0][dataframes[0].columns[0]]))] for i in range(len(dataframes[0].columns)-1)]
+
+    for batch_i in range(0, len(dataframes)):
+        for time_point_i in range(0, len(dataframes[0].columns)-1):
+            for variable_i in range(0, len(dataframes[0][dataframes[0].columns[0]])):
+                final_dataframe[time_point_i][variable_i][batch_i] = dataframes[batch_i][dataframes[0].columns[time_point_i]].iat[variable_i]
+
+    f_d = []
+    for time_point_i in range(len(final_dataframe)):
+        f_d.append(pd.DataFrame(final_dataframe[time_point_i]).T if transpose else pd.DataFrame(final_dataframe[time_point_i]))
+
+    return f_d
 
 
 def moving_average(time_series, window):
@@ -172,12 +194,12 @@ def transform_batch_diogo(files):
 
     output.close()
 
-
-process_batch_data(original_batch_file)
-
 discretized_batch_files = []
 
 for df_i in range(0,100):
-    discretized_batch_files.append(curr_dir+"\\batches_output\\discretized_batches"+str(df_i)+".csv")
+    discretized_batch_files.append(curr_dir+"\\process_datasets\\batches_output\\discretized_batches"+str(df_i)+".csv")
 
-transform_batch_diogo(discretized_batch_files)
+if __name__ == "__main__":
+    process_batch_data(original_batch_file)
+
+    transform_batch_diogo(discretized_batch_files)

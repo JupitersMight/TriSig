@@ -4,7 +4,19 @@ The TriSig.py file contains the code implementing the proposed statistical signi
 
 # plots
 
-The plots folder contains all the code necessary to replicate the results for the synthatic and use cases datasets. In addition, it also contains the code and the theoretically calculated p-values, to replicate the heatmaps of Appendix "x".
+The plots folder contains all the code necessary to replicate the results for the synthatic and use cases datasets.
+
+## Replicating the results:
+
+Simply open a command line inside this folder and execute:
+
+    $ python plots/plot_case_studies.py
+    
+, to replicate the results for the use cases datasets;
+
+    $ python plots/plot_sythetic_datasets.py
+    
+, to replicate the results for the synthetic datasets;
 
 # process_datasets
 

@@ -22,6 +22,15 @@ original_mouse_files = [
 ]
 
 
+def read_mouse_data(files, transpose=True):
+    dataframes = []
+    for file_i in range(len(files)):
+        df = pd.read_csv(files[file_i])
+        df.columns = [i for i in range(len(df.columns))]
+        dataframes.append(df.drop(columns=[df.columns[0]]).T if transpose else df.drop(columns=[df.columns[0]]))
+    return dataframes
+
+
 def process_mouse_data(files):
     dataframes = []
     for f_i in range(len(files)):
@@ -96,23 +105,25 @@ def transform_mouse_zaki(files):
 
     output.close()
 
-
-process_mouse_data(original_mouse_files)
-
 real_mouse_files = [
-    curr_dir+"\\mouse_genes_output\\real_0.csv",
-    curr_dir+"\\mouse_genes_output\\real_1.csv",
-    curr_dir+"\\mouse_genes_output\\real_2.csv",
-    curr_dir+"\\mouse_genes_output\\real_3.csv"
+    curr_dir+"\\process_datasets\\mouse_genes_output\\real_0.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\real_1.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\real_2.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\real_3.csv"
 ]
 
 discretized_mouse_files = [
-    curr_dir+"\\mouse_genes_output\\discretized_0.csv",
-    curr_dir+"\\mouse_genes_output\\discretized_1.csv",
-    curr_dir+"\\mouse_genes_output\\discretized_2.csv",
-    curr_dir+"\\mouse_genes_output\\discretized_3.csv"
+    curr_dir+"\\process_datasets\\mouse_genes_output\\discretized_0.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\discretized_1.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\discretized_2.csv",
+    curr_dir+"\\process_datasets\\mouse_genes_output\\discretized_3.csv"
 ]
 
-transform_mouse_zaki(discretized_mouse_files)
+if __name__ == "__main__":
+    process_mouse_data(original_mouse_files)
+
+
+
+    transform_mouse_zaki(discretized_mouse_files)
 
 
