@@ -1,10 +1,10 @@
 # Data
 
-In this folder the user can find the synthetic data, as well as the raw and processed data for each of the use cases (with the exception of the industrial batches dataset).
+In this folder the user can find the synthetic data, as well as the raw and processed data for each of the use cases (with the exception of the [industrial penicillin batches dataset](https://doi.org/10.1016/j.jbiotec.2014.10.029)).
 
 ## batches
 
-This dataset is too large to upload to github, but is available at https://data.mendeley.com/datasets/pdnjz7zz5x/1 
+This dataset is too large to upload to github, but is available at https://doi.org/10.17632/pdnjz7zz5x
 
 ## glycine
 
