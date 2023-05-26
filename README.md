@@ -1,4 +1,7 @@
 # TriSig 
+Description: This repository contains the code and datasets used in this work.
+
+# Highlights
 
 * Methodology for assessing the statistical significance of patterns in tensor data.
 
@@ -12,4 +15,4 @@
 
 # How to cite
 
-- Leonardo Alexandre, Rafael S. Costa and Rui Henriques, *Assessing the statistical significance of triclusters* , 2023 (article in preparation)
+► Leonardo Alexandre, Rafael S. Costa and Rui Henriques, *Assessing the statistical significance of triclusters* , 2023 (article in preparation)
