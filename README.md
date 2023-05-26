@@ -12,4 +12,4 @@
 
 # How to cite
 
-- Leonardo Alexandre, Rafael S. Costa and Rui Henriques, *Assessing the statistical significance of triclusters* (2023)
+- Leonardo Alexandre, Rafael S. Costa and Rui Henriques, *Assessing the statistical significance of triclusters* , 2023 (article in preparation)
