@@ -1,4 +1,4 @@
-# TriSig
+# TriSig 
 
 * Methodology for assessing the statistical significance of patterns in tensor data.
 
@@ -9,3 +9,7 @@
 * Sensitivity to three-way data with non-identically distributed variables.
 
 * Corrections for multiple hypotheses under Benjamini-Hochberg procedure.
+
+# How to cite
+
+- Leonardo Alexandre, Rafael S. Costa and Rui Henriques, *Assessing the statistical significance of triclusters* (2023)
