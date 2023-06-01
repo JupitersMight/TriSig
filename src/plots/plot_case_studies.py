@@ -20,7 +20,7 @@ from process_datasets.batches import *
 
 curr_dir = os.getcwd()
 
-I_D_D = False
+I_D_D = True
 
 def scatter_plot_triclusters(triclusters, test, save_folder,nl, X_axis_label, Y_axis_label, Z_axis_label):
     rows = []
@@ -51,8 +51,8 @@ def scatter_plot_triclusters(triclusters, test, save_folder,nl, X_axis_label, Y_
     sig_columns_avg = round(float(np.mean([len(t["columns"]) for t in sig])), 2) if len(sig) != 0 else 0.0
     sig_times_avg = round(float(np.mean([len(t["times"]) for t in sig])), 2) if len(sig) != 0 else 0.0
 
-    txt = "Sig. Triclusters: |X| = "+str(sig_rows_avg)+" , |Y| = "+str(sig_columns_avg)+" , |Z| = "+str(sig_times_avg)+" , Nr = "+str(len(sig))+\
-        "\nNon Sig. Triclusters: |X| = "+str(non_sig_rows_avg)+" , |Y| = "+str(non_sig_cols_avg)+" , |Z| = "+str(non_sig_time_avg)+" , Nr = "+str(len(non_sig))
+    txt = "Sig. Triclusters: |" + u'I\u0304'+ "| = "+str(sig_rows_avg)+" , |" + u'J\u0304'+ "| = "+str(sig_columns_avg)+" , |" + u'K\u0304'+ "| = "+str(sig_times_avg)+" , Nr = "+str(len(sig))+\
+        "\nNon Sig. Triclusters: |" + u'I\u0304'+ "| = "+str(non_sig_rows_avg)+" , |" + u'J\u0304'+ "| = "+str(non_sig_cols_avg)+" , |" + u'K\u0304'+ "| = "+str(non_sig_time_avg)+" , Nr = "+str(len(non_sig))
 
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(projection='3d')
@@ -186,10 +186,6 @@ for i in range(len(tri_results_zaki_batch)):
     tri_results_zaki_batch[i]["rows"] = tri_results_zaki_batch[i]["columns"]
     tri_results_zaki_batch[i]["columns"] = temp
 tri_results_delta_batch = read_results_delta_and_trias(result_files_delta[0])
-for i in range(len(tri_results_delta_batch)):
-    temp = tri_results_delta_batch[i]["rows"]
-    tri_results_delta_batch[i]["rows"] = tri_results_delta_batch[i]["columns"]
-    tri_results_delta_batch[i]["columns"] = temp
 tri_results_trias_batch = read_results_delta_and_trias(result_files_trias[0])
 for i in range(len(tri_results_trias_batch)):
     temp = tri_results_trias_batch[i]["rows"]
@@ -197,6 +193,7 @@ for i in range(len(tri_results_trias_batch)):
     tri_results_trias_batch[i]["columns"] = temp
 
 test_class = TriSig(batch_data)
+
 
 scatter_plot_triclusters(tri_results_zaki_batch, test_class.y_ind_z_markov, curr_dir + "\\zaki_batch_ind_time.png", 7, "Batchs", "Variables", "Time points")
 scatter_plot_triclusters(tri_results_trias_batch, test_class.y_ind_z_dep, curr_dir + "\\trias_batch_ind_dep.png", 7, "Batchs", "Variables", "Time points")

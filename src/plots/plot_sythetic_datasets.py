@@ -65,8 +65,8 @@ def scatter_plot_triclusters(triclusters, dataset, test_i, save_folder,nl, X_axi
     sig_columns_avg = round(float(np.mean([len(t["columns"]) for t in sig])), 2) if len(sig) != 0 else 0.0
     sig_times_avg = round(float(np.mean([len(t["times"]) for t in sig])), 2) if len(sig) != 0 else 0.0
 
-    txt = "Sig. Triclusters: |X| = "+str(sig_rows_avg)+" , |Y| = "+str(sig_columns_avg)+" , |Z| = "+str(sig_times_avg)+" , Nr = "+str(len(sig))+\
-        "\nNon Sig. Triclusters: |X| = "+str(non_sig_rows_avg)+" , |Y| = "+str(non_sig_cols_avg)+" , |Z| = "+str(non_sig_time_avg)+" , Nr = "+str(len(non_sig))
+    txt = "Sig. Triclusters: |" + u'I\u0304'+ "| = "+str(sig_rows_avg)+" , |" + u'J\u0304'+ "| = "+str(sig_columns_avg)+" , |" + u'K\u0304'+ "| = "+str(sig_times_avg)+" , Nr = "+str(len(sig))+\
+        "\nNon Sig. Triclusters: |" + u'I\u0304'+ "| = "+str(non_sig_rows_avg)+" , |" + u'J\u0304'+ "| = "+str(non_sig_cols_avg)+" , |" + u'K\u0304'+ "| = "+str(non_sig_time_avg)+" , Nr = "+str(len(non_sig))
 
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(projection='3d')
@@ -118,7 +118,7 @@ def read_tri_tab_files(file, y_dimension, z_dimension):
             temp_dataframes[i].append(values[i])
 
     for a_i in range(len(temp_dataframes)):
-        dataframes.append(pd.DataFrame(np.row_stack(temp_dataframes[a_i])))
+        dataframes.append(pd.DataFrame(np.row_stack(temp_dataframes[a_i])).astype(float))
 
     return dataframes
 

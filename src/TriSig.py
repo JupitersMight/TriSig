@@ -68,7 +68,6 @@ class TriSig:
     @staticmethod
     def hochberg_critical_value(p_values, false_discovery_rate=0.05):
         ordered_pvalue = sorted(p_values)
-        print(ordered_pvalue)
 
         critical_values = []
         for i in range(1,len(ordered_pvalue)+1):
@@ -97,7 +96,11 @@ class TriSig:
                 print("P("+str(z_i)+")")
             for col in tricluster["columns"]:
                 y_i = self.data[z_i].columns[col]
-                val_yi = self.data[z_i][y_i][tricluster["rows"][0]]
+
+                val_yi = self.data[z_i][y_i].iloc[tricluster["rows"]].value_counts().idxmax()
+                #print(val_yi_aux)
+
+                #val_yi = self.data[z_i][y_i][tricluster["rows"][0]]
                 p = p * Decimal(self.p_pre_computed[y_i][val_yi])
                 if print_statistics:
                     print("P(Y) = "+str(self.p_pre_computed[y_i][val_yi]))
@@ -134,11 +137,17 @@ class TriSig:
             if print_statistics:
                 print("P("+str(z_i)+")")
             y_i = self.data[z_i].columns[tricluster["columns"]]
-            val_yi = self.data[z_i][y_i]
-            pattern_z = val_yi[val_yi.columns[0]].astype(str) + val_yi[val_yi.columns[1]].astype(str)
-            for i in range(2, len(val_yi.columns)):
-                pattern_z += val_yi[val_yi.columns[i]].astype(str)
-            pattern_z = pattern_z[tricluster["rows"][0]]
+
+            val_yi = self.data[z_i][y_i].iloc[tricluster["rows"]].value_counts().idxmax()
+            pattern_z = val_yi[0].astype(str) + val_yi[1].astype(str)
+            for i in range(2, len(val_yi)):
+                pattern_z += val_yi[i].astype(str)
+
+            #val_yi = self.data[z_i][y_i]
+            #pattern_z = val_yi[val_yi.columns[0]].astype(str) + val_yi[val_yi.columns[1]].astype(str)
+            #for i in range(2, len(val_yi.columns)):
+            #    pattern_z += val_yi[val_yi.columns[i]].astype(str)
+            #pattern_z = pattern_z[tricluster["rows"][0]]
             temp_p = combined_data_concatenated_dict[pattern_z] / len(combined_data_concatenated)
             p = p * Decimal(temp_p)
             if print_statistics:
@@ -211,9 +220,11 @@ class TriSig:
         p = Decimal(1.0)
         for col in tricluster["columns"]:
             y_i = self.data[0].columns[col]
-            val = self.data[tricluster["times"][0]][y_i][tricluster["rows"][0]]
+            val = self.data[tricluster["times"][0]][y_i].value_counts().idxmax()
+#            val = self.data[tricluster["times"][0]][y_i][tricluster["rows"][0]]
             p = p * Decimal(self.p_pre_computed[self.data[0].columns[col]][val])
-            print("P(k1)="+str(self.p_pre_computed[self.data[0].columns[col]][val]))
+            if print_statistics:
+                print("P(k1)="+str(self.p_pre_computed[self.data[0].columns[col]][val]))
 
             z = 0
             while z < (len(tricluster["times"]) - 1):
@@ -222,9 +233,14 @@ class TriSig:
                 z_1 = self.data[tricluster["times"][z]]
 
                 temp_data = z_0[y_i].astype(str) + z_1[y_i].astype(str)
-                prob_antecedent = self.p_pre_computed[y_i][z_0[y_i][tricluster["rows"][0]]]
-                t = self.transitions[y_i][temp_data[tricluster["rows"][0]]]
-                print("P(transition-"+str(z)+")="+str(float((Decimal(t)/Decimal(prob_antecedent)))))
+                prob_antecedent = self.p_pre_computed[y_i][z_0[y_i].value_counts().idxmax()]
+                #prob_antecedent = self.p_pre_computed[y_i][z_0[y_i][tricluster["rows"][0]]]
+                #Most common transition
+                most_t = temp_data.iloc[tricluster["rows"]].value_counts().idxmax()
+                t = self.transitions[y_i][most_t]
+                #t = self.transitions[y_i][temp_data[tricluster["rows"][0]]]
+                if print_statistics:
+                    print("P(transition-"+str(z)+")="+str(float((Decimal(t)/Decimal(prob_antecedent)))))
                 p = p * (Decimal(t)/Decimal(prob_antecedent))
 
         # Adjust p for misalignments
@@ -244,7 +260,7 @@ class TriSig:
 
         return float(pvalue)
 
-    def y_dep_z_markov(self, tricluster, i_d_d_vars=False, print_statistics=False):
+    def y_dep_z_markov(self, tricluster, i_d_d_vars=False, print_statistics=True):
         if print_statistics:
             print("Tricluster("+str(len(tricluster["rows"]))+","+str(len(tricluster["columns"]))+","+str(len(tricluster["times"]))+")")
 
@@ -257,7 +273,10 @@ class TriSig:
             combined_data_concatenated += filtered_cols_data[filtered_cols_data.columns[i]].astype(str)
         combined_data_concatenated_dict = combined_data_concatenated.value_counts().to_dict()
 
-        p = Decimal(combined_data_concatenated_dict[combined_data_concatenated[tricluster["rows"][0]]]/len(combined_data_concatenated))
+        #most common
+        most_t = combined_data_concatenated.iloc[tricluster["rows"]].value_counts().idxmax()
+        p = Decimal(combined_data_concatenated_dict[most_t]/len(combined_data_concatenated))
+        #p = Decimal(combined_data_concatenated_dict[combined_data_concatenated[tricluster["rows"][0]]]/len(combined_data_concatenated))
         if print_statistics:
             print("P(k1)="+str(p))
         # Create Transitions dictionary
@@ -292,8 +311,15 @@ class TriSig:
                 z_0_concatenated += z_0[z_0.columns[i]].astype(str)
                 z_1_concatenated += z_1[z_1.columns[i]].astype(str)
 
-            p_transition = Decimal(transition_dict[(z_0_concatenated+z_1_concatenated)[tricluster["rows"][0]]])/Decimal(len(transitions_combined))
-            p_ante = Decimal(combined_data_concatenated_dict[z_0_concatenated[tricluster["rows"][0]]])/Decimal(len(combined_data_concatenated))
+            # Most common
+            most_t_p_transition = (z_0_concatenated+z_1_concatenated).iloc[tricluster["rows"]].value_counts().idxmax()
+            p_transition = Decimal(transition_dict[most_t_p_transition])/Decimal(len(transitions_combined))
+            # Most common
+            most_t_p_ante = z_0_concatenated.iloc[tricluster["rows"]].value_counts().idxmax()
+            p_ante = Decimal(combined_data_concatenated_dict[most_t_p_ante])/Decimal(len(combined_data_concatenated))
+
+            #p_transition = Decimal(transition_dict[(z_0_concatenated+z_1_concatenated)[tricluster["rows"][0]]])/Decimal(len(transitions_combined))
+            #p_ante = Decimal(combined_data_concatenated_dict[z_0_concatenated[tricluster["rows"][0]]])/Decimal(len(combined_data_concatenated))
             if print_statistics:
                 print("P(transition-"+str(z)+")="+str(float(p_transition/p_ante)))
             p = p * p_transition/p_ante
